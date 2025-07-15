@@ -6,15 +6,15 @@ from Functions import login
 from Functions import senha
 
 
-quinzena,tipo = Functions.iniciar_fluxo()
+quinzena,tipo,carrie = Functions.iniciar_fluxo()
 
 if tipo == "Regular":
 
-    paginas_totais, pagina_atual = Functions.definir_paginacao(tipo,quinzena,login,senha)
+    paginas_totais, pagina_atual = Functions.definir_paginacao(tipo,quinzena,login,senha,carrie)
 
 
 
-    matriz = Functions.captura_de_dados_regulares(tipo,quinzena,pagina_atual,paginas_totais)
+    matriz = Functions.captura_de_dados_regulares(tipo,quinzena,pagina_atual,paginas_totais,carrie)
 
     rotas,penalidades,adicionais = Functions.filtrar_tabelas(matriz)
 
@@ -31,9 +31,9 @@ if tipo == "Regular":
 
 
 else:
-    paginas_totais,pagina_atual = Functions.definir_paginacao(tipo,quinzena,login,senha)
+    paginas_totais,pagina_atual = Functions.definir_paginacao(tipo,quinzena,login,senha,carrie)
 
-    matriz = Functions.captura_de_dados_complementares(tipo,quinzena,pagina_atual,paginas_totais)
+    matriz = Functions.captura_de_dados_complementares(tipo,quinzena,pagina_atual,paginas_totais,carrie)
 
     Functions.complementar_para_excel(matriz,quinzena)
 

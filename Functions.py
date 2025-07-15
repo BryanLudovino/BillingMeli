@@ -9,16 +9,20 @@ senha = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjp7ImlkIjo1LCJlbWFpbCI6Im
 
 def iniciar_fluxo():
     tipo_de_regulares = {"1": "Regular", "2": "Complementaria"}
-    tipo = input("Bem vindo à Captura processada de Faturas do Meli\nPor favor, digite o tipo de fatura que você deseja \n1-Regular\n2-Complementar :")
+    isonwcarrie = {"1":"true","2":"false"}
+    tipo = input("Bem vindo à Captura processada de Faturas do Meli\nPor favor, digite o tipo de fatura que você deseja:\n1-Regular\n2-Complementar  ")
     while tipo not in tipo_de_regulares:
         print("Tipo Inválido!!")
-        tipo = input("Por favor, digite o tipo de fatura que você deseja (Regular ou Complementar): ")
+        tipo = input("Por favor, digite o tipo de fatura que você deseja (Regular ou Complementar):  ")
     tipo = tipo_de_regulares[tipo]
     quinzena = input("Agora digite a Quinzena desejada (ex: 202505Q1): ")
+    while carrie not in isonwcarrie:
+        print("Seleção Inválida")
+        carrie = input("isonwcarrie?: \n1-true\n2-false")
     print("Etapa finalizada de Fluxo Finalizada com sucesso")
-    return quinzena, tipo
+    return quinzena, tipo,carrie
 
-def definir_paginacao(tipo, quinzena,login,senha):
+def definir_paginacao(tipo, quinzena,login,senha,carrie):
     try:
         requisicao_controller = requests.get(
             "https://prafrota-be-bff-tenant-api.grupopra.tech/meli-pre-invoice-detail",
@@ -26,7 +30,7 @@ def definir_paginacao(tipo, quinzena,login,senha):
                 "page": 1,
                 "limit": 1,
                 "meliType": tipo,
-                "isOwnCarrier": "true",
+                "isOwnCarrier": carrie,
                 "meliPeriodName": quinzena
             },
             headers={
@@ -44,7 +48,7 @@ def definir_paginacao(tipo, quinzena,login,senha):
         print(f"Erro ao definir paginação: {e}")
         return total_de_paginas,current_page
 
-def captura_de_dados_regulares(tipo, quinzena, current_page, total_de_paginas):
+def captura_de_dados_regulares(tipo, quinzena, current_page, total_de_paginas,carrie):
     tabela = []
     print(f"Iniciando captura de dados regulares: {total_de_paginas} páginas totais")
     
@@ -60,7 +64,7 @@ def captura_de_dados_regulares(tipo, quinzena, current_page, total_de_paginas):
                     "page": page,  # Usa a variável do loop, minúsculo
                     "limit": 1,
                     "meliType": tipo,
-                    "isOwnCarrier": "true",
+                    "isOwnCarrier": carrie,
                     "meliPeriodName": quinzena
                 },
                 headers={
@@ -226,15 +230,22 @@ def tabela_adicionais(adicionais):
     
     return adicionais
 
-def regular_para_excel(rotas, penalidades, adicionais, quinzena):
-    with pd.ExcelWriter(f"C:/Users/Bryan Souza/Nextcloud/Contas a Receber - Pralog/Mercado Livre/Análises Meli/Billing_controll/Regulares/Fatura Regular Quinzena {quinzena}.xlsx", engine="openpyxl") as writer:
-        rotas.to_excel(writer, sheet_name="Rotas", index=False)
-        penalidades.to_excel(writer, sheet_name="Descontos", index=False)
-        adicionais.to_excel(writer, sheet_name="Adicionais", index=False)
-    print(f"Planilha Fatura Regular Quinzena {quinzena}, salva com sucesso!!")    
+def regular_para_excel(rotas, penalidades, adicionais, quinzena, carrie):
+    if carrie == "true":
+        with pd.ExcelWriter(f"C:/Users/Bryan Souza/Nextcloud/Contas a Receber - Pralog/Mercado Livre/Análises Meli/Billing_controll/Regulares/Fatura Regular Quinzena {quinzena}.xlsx", engine="openpyxl") as writer:
+            rotas.to_excel(writer, sheet_name="Rotas", index=False)
+            penalidades.to_excel(writer, sheet_name="Descontos", index=False)
+            adicionais.to_excel(writer, sheet_name="Adicionais", index=False)
+        print(f"Planilha Fatura Regular Quinzena {quinzena}, salva com sucesso!!")
+    else:
+        with pd.ExcelWriter(f"C:/Users/Bryan Souza/Documents/Devizinho_do_mal/Fatura Regular Quinzena {quinzena}.xlsx", engine="openpyxl") as writer:
+            rotas.to_excel(writer, sheet_name="Rotas", index=False)
+            penalidades.to_excel(writer, sheet_name="Descontos", index=False)
+            adicionais.to_excel(writer, sheet_name="Adicionais", index=False)
+        print(f"Planilha Fatura Regular Quinzena {quinzena}, salva com sucesso!!")
 
 
-def captura_de_dados_complementares(tipo, quinzena, current_page, total_de_paginas):
+def captura_de_dados_complementares(tipo, quinzena, current_page, total_de_paginas,carrie):
     tabela = []
     print(f"Iniciando captura de dados complementares: {total_de_paginas} páginas totais")
     
@@ -248,7 +259,7 @@ def captura_de_dados_complementares(tipo, quinzena, current_page, total_de_pagin
                     "page": page,
                     "limit": 1,
                     "meliType": tipo,
-                    "isOwnCarrier": "true",
+                    "isOwnCarrier": carrie,
                     "meliPeriodName": quinzena
                 },
                 headers={
@@ -311,6 +322,12 @@ def captura_de_dados_complementares(tipo, quinzena, current_page, total_de_pagin
     print(f"Captura finalizada: {len(tabela)} registros totais")
     return tabela
 
-def complementar_para_excel(tabela, quinzena):
-    complementares = pd.DataFrame(tabela)
-    complementares.to_excel(f"C:/Users/Bryan Souza/Nextcloud/Contas a Receber - Pralog/Mercado Livre/Análises Meli/Billing_controll/Complementares/Fatura_Complementar_Quinzena_{quinzena}.xlsx", index=False)
+def complementar_para_excel(tabela, quinzena,carrier):
+    if carrier =="true":
+
+        complementares = pd.DataFrame(tabela)
+        complementares.to_excel(f"C:/Users/Bryan Souza/Nextcloud/Contas a Receber - Pralog/Mercado Livre/Análises Meli/Billing_controll/Complementares/Fatura_Complementar_Quinzena_{quinzena}.xlsx", index=False)
+        
+    else:
+        complementares = pd.DataFrame(tabela)
+        complementares.to_excel(f"C:/Users/Bryan Souza/Documents/Devizinho_do_malcomply/Fatura_Complementar_Quinzena_{quinzena}.xlsx", index=False)
