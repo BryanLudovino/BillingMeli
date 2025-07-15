@@ -5,7 +5,7 @@ import time
 import re
 
 login = "e23b5220-da7e-414d-a773-242c0fce2c5d"
-senha = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjp7ImlkIjo1LCJlbWFpbCI6ImJyeWFuLnNvdXphQGdydXBvcHJhbG9nLmNvbS5iciJ9LCJ0ZW5hbnQiOnsidXVpZCI6ImUyM2I1MjIwLWRhN2UtNDE0ZC1hNzczLTI0MmMwZmNlMmM1ZCJ9LCJpYXQiOjE3NTI0OTM2ODIsImV4cCI6MTc1MjUzNjg4Mn0.9zMgvcLS0Ak6t7RkAuBWABIhwzaa1y7GTsinaC2thd8"
+senha = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjp7ImlkIjo1LCJlbWFpbCI6ImJyeWFuLnNvdXphQGdydXBvcHJhbG9nLmNvbS5iciJ9LCJ0ZW5hbnQiOnsidXVpZCI6ImUyM2I1MjIwLWRhN2UtNDE0ZC1hNzczLTI0MmMwZmNlMmM1ZCJ9LCJpYXQiOjE3NTI1MzgzNzcsImV4cCI6MTc1MjU4MTU3N30.pSHsQwQAxP923ZXf6BxpfHyZFPvFJWq5sSkVrFox6aA"
 
 def iniciar_fluxo():
     tipo_de_regulares = {"1": "Regular", "2": "Complementaria"}
@@ -16,11 +16,13 @@ def iniciar_fluxo():
         tipo = input("Por favor, digite o tipo de fatura que você deseja (Regular ou Complementar):  ")
     tipo = tipo_de_regulares[tipo]
     quinzena = input("Agora digite a Quinzena desejada (ex: 202505Q1): ")
+    carrie = input("isonwcarrie?: \n1-true\n2-false")
     while carrie not in isonwcarrie:
         print("Seleção Inválida")
         carrie = input("isonwcarrie?: \n1-true\n2-false")
+    carrie = isonwcarrie[carrie]
     print("Etapa finalizada de Fluxo Finalizada com sucesso")
-    return quinzena, tipo,carrie
+    return quinzena, tipo, carrie
 
 def definir_paginacao(tipo, quinzena,login,senha,carrie):
     try:

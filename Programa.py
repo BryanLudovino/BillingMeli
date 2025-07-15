@@ -27,7 +27,7 @@ if tipo == "Regular":
     adicional = Functions.tabela_adicionais(adicionais)
 
 
-    Functions.regular_para_excel(routas_billing,descontos,adicionais,quinzena)
+    Functions.regular_para_excel(routas_billing,descontos,adicionais,quinzena,carrie)
 
 
 else:
@@ -35,7 +35,7 @@ else:
 
     matriz = Functions.captura_de_dados_complementares(tipo,quinzena,pagina_atual,paginas_totais,carrie)
 
-    Functions.complementar_para_excel(matriz,quinzena)
+    Functions.complementar_para_excel(matriz,quinzena,carrie)
 
 
 
