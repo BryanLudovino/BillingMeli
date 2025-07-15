@@ -237,7 +237,7 @@ def regular_para_excel(rotas, penalidades, adicionais, quinzena, carrie):
         with pd.ExcelWriter(f"C:/Users/Bryan Souza/Nextcloud/Contas a Receber - Pralog/Mercado Livre/Análises Meli/Billing_controll/Regulares/Fatura Regular Quinzena {quinzena}.xlsx", engine="openpyxl") as writer:
             rotas.to_excel(writer, sheet_name="Rotas", index=False)
             penalidades.to_excel(writer, sheet_name="Descontos", index=False)
-            adicionais.to_excel(writer, sheet_name="Adicionais", index=False)
+        adicionais.to_excel(f"{quinzena}.xlsx" ,index=False)
         print(f"Planilha Fatura Regular Quinzena {quinzena}, salva com sucesso!!")
     else:
         with pd.ExcelWriter(f"C:/Users/Bryan Souza/Documents/Devizinho_do_mal/Fatura Regular Quinzena {quinzena}.xlsx", engine="openpyxl") as writer:
