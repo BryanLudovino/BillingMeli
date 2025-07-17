@@ -5,7 +5,7 @@ import time
 import re
 
 login = "e23b5220-da7e-414d-a773-242c0fce2c5d"
-senha = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjp7ImlkIjo1LCJlbWFpbCI6ImJyeWFuLnNvdXphQGdydXBvcHJhbG9nLmNvbS5iciJ9LCJ0ZW5hbnQiOnsidXVpZCI6ImUyM2I1MjIwLWRhN2UtNDE0ZC1hNzczLTI0MmMwZmNlMmM1ZCJ9LCJpYXQiOjE3NTI1MzgzNzcsImV4cCI6MTc1MjU4MTU3N30.pSHsQwQAxP923ZXf6BxpfHyZFPvFJWq5sSkVrFox6aA"
+senha = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjp7ImlkIjo1LCJlbWFpbCI6ImJyeWFuLnNvdXphQGdydXBvcHJhbG9nLmNvbS5iciJ9LCJ0ZW5hbnQiOnsidXVpZCI6ImUyM2I1MjIwLWRhN2UtNDE0ZC1hNzczLTI0MmMwZmNlMmM1ZCJ9LCJpYXQiOjE3NTI3NjYzMzMsImV4cCI6MTc1MjgwOTUzM30.Ew93QOe8HhJB0RLFRxZYZ5z6rvq4iXh2s2XNOaYBikg"
 
 def iniciar_fluxo():
     tipo_de_regulares = {"1": "Regular", "2": "Complementaria"}
@@ -184,8 +184,8 @@ def tabela_rotas(rotas):
         rotas['ambulance'] = rotas['Description_route'].str.contains("AMBULANCE", case=False, na=False).map({True: 'Yes', False: 'No'})
         rotas['part_of_time'] = rotas['Description_route'].str.contains("TIME", case=False, na=False).map({True: 'Yes', False: 'No'})
         rotas['holiday'] = rotas['Description_route'].str.contains("HOLYDAY", case=False, na=False).map({True: 'Yes', False: 'No'})
-        rotas[['type_route', 'part2']] = rotas['Description_route'].str.split(' - SVC: ', n=1, expand=True)
-        rotas['service'] = rotas['part2'].str.split(' - ',expand=True)[0]
+        rotas[['type_route', 'part2']] = rotas['Description_route'].str.split(' - SVC:', n=1, expand=True)
+        rotas['service'] = rotas['part2'].str.split(' - ',expand=True)[0].str.strip()
         rotas.drop(columns= ['Description_route','type_len','part2'],inplace= True)
         rotas = rotas[['company','id_invoiceId','detail_route_id','init_date','finish_date','operation','two_weeks','type_route','service','license_plate','driver_name','km','ambulance','part_of_time','holiday','tax_iss','tax_icms','cost']]
 
@@ -234,17 +234,17 @@ def tabela_adicionais(adicionais):
 
 def regular_para_excel(rotas, penalidades, adicionais, quinzena, carrie):
     if carrie == "true":
-        with pd.ExcelWriter(f"C:/Users/Bryan Souza/Nextcloud/Contas a Receber - Pralog/Mercado Livre/Análises Meli/Billing_controll/Regulares/Fatura Regular Quinzena {quinzena}.xlsx", engine="openpyxl") as writer:
+        with pd.ExcelWriter(f"C:/Users/Bryan Souza/Nextcloud/Contas a Receber - Pralog/Mercado Livre/Billing_controll/Regulares/Fatura Regular Quinzena {quinzena}.xlsx", engine="openpyxl") as writer:
             rotas.to_excel(writer, sheet_name="Rotas", index=False)
             penalidades.to_excel(writer, sheet_name="Descontos", index=False)
-        adicionais.to_excel(f"{quinzena}.xlsx" ,index=False)
+        adicionais.to_excel(f"C:/Users/Bryan Souza/Nextcloud/Contas a Receber - Pralog/Mercado Livre/Billing_controll/Adicionais/Adicional Regular {quinzena}.xlsx" ,index=False)
         print(f"Planilha Fatura Regular Quinzena {quinzena}, salva com sucesso!!")
     else:
         with pd.ExcelWriter(f"C:/Users/Bryan Souza/Documents/Devizinho_do_mal/Fatura Regular Quinzena {quinzena}.xlsx", engine="openpyxl") as writer:
             rotas.to_excel(writer, sheet_name="Rotas", index=False)
             penalidades.to_excel(writer, sheet_name="Descontos", index=False)
-            adicionais.to_excel(writer, sheet_name="Adicionais", index=False)
-        print(f"Planilha Fatura Regular Quinzena {quinzena}, salva com sucesso!!")
+        print(f"Planilha Fatura Regular Quinzena {quinzena}, salva com sucesso!")
+
 
 
 def captura_de_dados_complementares(tipo, quinzena, current_page, total_de_paginas,carrie):
