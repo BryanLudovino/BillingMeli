@@ -4,9 +4,10 @@ import openpyxl
 import time
 import re
 from tqdm import tqdm
+import numpy as np
 
 login = "e23b5220-da7e-414d-a773-242c0fce2c5d"
-senha = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjp7ImlkIjo1LCJlbWFpbCI6ImJyeWFuLnNvdXphQGdydXBvcHJhbG9nLmNvbS5iciJ9LCJ0ZW5hbnQiOnsidXVpZCI6ImUyM2I1MjIwLWRhN2UtNDE0ZC1hNzczLTI0MmMwZmNlMmM1ZCJ9LCJpYXQiOjE3NTI5NDA0MTcsImV4cCI6MTc1Mjk4MzYxN30.OPBlTUNrtmuXlrbPZ0co_QJXbsvYMSFWkTH56usSAx4"
+senha = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjp7ImlkIjo1LCJlbWFpbCI6ImJyeWFuLnNvdXphQGdydXBvcHJhbG9nLmNvbS5iciJ9LCJ0ZW5hbnQiOnsidXVpZCI6ImUyM2I1MjIwLWRhN2UtNDE0ZC1hNzczLTI0MmMwZmNlMmM1ZCJ9LCJpYXQiOjE3NTMxMTAyOTcsImV4cCI6MTc1MzE1MzQ5N30.7IZCI4JS7n6hu1FEoO-zGOC7rqkDfIsTG_C-_TLnPqw"
 
 def iniciar_fluxo():
     tipo_de_regulares = {"1": "Regular", "2": "Complementaria"}
@@ -118,7 +119,8 @@ def captura_de_dados_regulares(tipo, quinzena, current_page, total_de_paginas,ca
                             "tax_iss": 0,
                             "tax_icms": 0,
                             "amount": 0,
-                            "cost": float(details.get("total_cost", 0) or 0)
+                            "cost": float(details.get("total_cost", 0) or 0),
+                            "custo": float(details.get("cost", 0) or 0)
                         })
                         registros_pagina += 1
                         continue
@@ -139,7 +141,8 @@ def captura_de_dados_regulares(tipo, quinzena, current_page, total_de_paginas,ca
                             "tax_iss": float(det.get("tax_iss", 0) or 0),
                             "tax_icms": float(det.get("tax_icms", 0) or 0),
                             "amount": int(det.get("amount", 0) or 0),
-                            "cost": float(det.get("cost", 0) or 0)
+                            "cost": float(det.get("cost", 0) or 0),
+                            "custo": float(details.get("cost", 0) or 0)
                         })
                         registros_pagina += 1
             
@@ -164,7 +167,7 @@ def filtrar_tabelas(tabela):
     # Criar cópias explícitas
     rotas = df[df['type_len'] == "service"].copy()
     penalidades = df[df['type_len'] == "penalty"].copy()
-    adicionais = df[df['type_len'] == "additional"].copy()
+    adicionais = df[df['type_len'].isin(["additional", "refund"])].copy()
     
     return rotas, penalidades, adicionais
 
@@ -186,7 +189,7 @@ def tabela_rotas(rotas):
         rotas['holiday'] = rotas['Description_route'].str.contains("HOLYDAY", case=False, na=False).map({True: 'Yes', False: 'No'})
         rotas[['type_route', 'part2']] = rotas['Description_route'].str.split(' - SVC:', n=1, expand=True)
         rotas['service'] = rotas['part2'].str.split(' - ',expand=True)[0].str.strip()
-        rotas.drop(columns= ['Description_route','type_len','part2'],inplace= True)
+        rotas.drop(columns= ['Description_route','type_len','part2','custo'],inplace= True)
         rotas = rotas[['company','id_invoiceId','detail_route_id','init_date','finish_date','operation','two_weeks','type_route','service','license_plate','driver_name','km','ambulance','part_of_time','holiday','tax_iss','tax_icms','cost']]
 
     else:
@@ -202,10 +205,16 @@ def tabela_rotas(rotas):
 
 def tabela_descontos(penalidades):
     if 'Description_route' in penalidades.columns:
-        penalidades['Description_route'] = penalidades['Description_route'].str.replace('>', ':', regex=False)
+        penalidades['Description_route'] = penalidades['Description_route'].str.replace('> ', ':', regex=False)
         penalidades[['reason', 'dados']] = penalidades['Description_route'].str.split(': ', n=1, expand=True)
-        penalidades[['placa', 'datax', 'id Packages']] = penalidades['dados'].str.split(' ', n=2, expand=True)
-        drop_cols = [col for col in ['placa', 'datax', 'Description_route', 'tax_iss', 'tax_icms', 'dados', 'type_len', 'amount'] if col in penalidades.columns]
+        penalidades[['placa', 'datax', 'A']] = penalidades['dados'].str.split(' ', n=2, expand=True)
+        penalidades['id Packages']= penalidades.apply(
+            lambda row:
+            row['datax'] if row ['reason']== 'Pnr Packages Penalty'
+            else row['A'] if row ['reason'] == 'Lost Packages Penalty'
+            else np.nan, axis=1)
+        penalidades[['Reason','exc']] = penalidades['reason'].str.split(':',n=1,expand = True)  
+        drop_cols = [col for col in ['placa', 'datax', 'Description_route', 'tax_iss', 'tax_icms', 'dados', 'type_len', 'amount','A','reason','exc','custo'] if col in penalidades.columns]
         penalidades.drop(columns=drop_cols, inplace=True)
         return penalidades
 
@@ -216,18 +225,19 @@ def tabela_adicionais(adicionais):
     
     if 'Description_route' in adicionais.columns:
         # Faz o split e garante que sempre há 2 colunas
-        split_result = adicionais['Description_route'].str.split(' - ', n=1, expand=True)
+        split_result = adicionais['Description_route'].str.split('-', n=1, expand=True)
         
         # Se só há 1 coluna (não encontrou ' - '), cria a segunda coluna vazia
         if len(split_result.columns) == 1:
             split_result[1] = None
+
         
         # Atribui as colunas
-        adicionais['reason'] = split_result[0]
+        adicionais['reason'] = split_result[0].str.strip()
         adicionais['excluir'] = split_result[1]
-        
+
         # Remove colunas desnecessárias
-        drop_cols = [col for col in ['tax_iss', 'tax_icms', 'type_len', 'excluir', 'Description_route'] if col in adicionais.columns]
+        drop_cols = [col for col in ['tax_iss', 'tax_icms', 'type_len', 'excluir', 'Description_route','cost'] if col in adicionais.columns]
         adicionais.drop(columns=drop_cols, inplace=True)
     
     return adicionais
