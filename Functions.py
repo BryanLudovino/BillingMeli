@@ -3,9 +3,10 @@ import requests
 import openpyxl
 import time
 import re
+from tqdm import tqdm
 
 login = "e23b5220-da7e-414d-a773-242c0fce2c5d"
-senha = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjp7ImlkIjo1LCJlbWFpbCI6ImJyeWFuLnNvdXphQGdydXBvcHJhbG9nLmNvbS5iciJ9LCJ0ZW5hbnQiOnsidXVpZCI6ImUyM2I1MjIwLWRhN2UtNDE0ZC1hNzczLTI0MmMwZmNlMmM1ZCJ9LCJpYXQiOjE3NTI3NjYzMzMsImV4cCI6MTc1MjgwOTUzM30.Ew93QOe8HhJB0RLFRxZYZ5z6rvq4iXh2s2XNOaYBikg"
+senha = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjp7ImlkIjo1LCJlbWFpbCI6ImJyeWFuLnNvdXphQGdydXBvcHJhbG9nLmNvbS5iciJ9LCJ0ZW5hbnQiOnsidXVpZCI6ImUyM2I1MjIwLWRhN2UtNDE0ZC1hNzczLTI0MmMwZmNlMmM1ZCJ9LCJpYXQiOjE3NTI5NDA0MTcsImV4cCI6MTc1Mjk4MzYxN30.OPBlTUNrtmuXlrbPZ0co_QJXbsvYMSFWkTH56usSAx4"
 
 def iniciar_fluxo():
     tipo_de_regulares = {"1": "Regular", "2": "Complementaria"}
@@ -143,7 +144,6 @@ def captura_de_dados_regulares(tipo, quinzena, current_page, total_de_paginas,ca
                         registros_pagina += 1
             
             print(f"Página {page}: {registros_pagina} registros processados")
-            time.sleep(1)  # Pausa entre requisições
             page += 1  # Incrementa a variável do loop
             
         except Exception as e:
@@ -233,18 +233,24 @@ def tabela_adicionais(adicionais):
     return adicionais
 
 def regular_para_excel(rotas, penalidades, adicionais, quinzena, carrie):
+    from tqdm import tqdm
     if carrie == "true":
         with pd.ExcelWriter(f"C:/Users/Bryan Souza/Nextcloud/Contas a Receber - Pralog/Mercado Livre/Billing_controll/Regulares/Fatura Regular Quinzena {quinzena}.xlsx", engine="openpyxl") as writer:
-            rotas.to_excel(writer, sheet_name="Rotas", index=False)
-            penalidades.to_excel(writer, sheet_name="Descontos", index=False)
+            for df, name in zip([rotas, penalidades], ["Rotas", "Descontos"]):
+                tqdm.pandas(desc=f'Salvando {name}')
+                df.progress_apply(lambda x: None, axis=1)
+                df.to_excel(writer, sheet_name=name, index=False)
+        tqdm.pandas(desc='Salvando Adicionais')
+        adicionais.progress_apply(lambda x: None, axis=1)
         adicionais.to_excel(f"C:/Users/Bryan Souza/Nextcloud/Contas a Receber - Pralog/Mercado Livre/Billing_controll/Adicionais/Adicional Regular {quinzena}.xlsx" ,index=False)
         print(f"Planilha Fatura Regular Quinzena {quinzena}, salva com sucesso!!")
     else:
         with pd.ExcelWriter(f"C:/Users/Bryan Souza/Documents/Devizinho_do_mal/Fatura Regular Quinzena {quinzena}.xlsx", engine="openpyxl") as writer:
-            rotas.to_excel(writer, sheet_name="Rotas", index=False)
-            penalidades.to_excel(writer, sheet_name="Descontos", index=False)
+            for df, name in zip([rotas, penalidades], ["Rotas", "Descontos"]):
+                tqdm.pandas(desc=f'Salvando {name}')
+                df.progress_apply(lambda x: None, axis=1)
+                df.to_excel(writer, sheet_name=name, index=False)
         print(f"Planilha Fatura Regular Quinzena {quinzena}, salva com sucesso!")
-
 
 
 def captura_de_dados_complementares(tipo, quinzena, current_page, total_de_paginas,carrie):
@@ -270,6 +276,7 @@ def captura_de_dados_complementares(tipo, quinzena, current_page, total_de_pagin
                     "x-tenant-user-auth": senha
                 }
             )
+            
             if resposta.status_code != 200:
                 print(f"Erro na página {page}: Status {resposta.status_code}")
                 page += 1
@@ -295,8 +302,8 @@ def captura_de_dados_complementares(tipo, quinzena, current_page, total_de_pagin
                         "two_weeks": linha.get('meliPeriodName'),
                         "description": None,
                         "payment": None,
-                        "cost": None,
-                        "pay_or_received":None
+                        "pay_or_received":None,
+                        "cost": None
                     })
                     registros_pagina += 1
                 else:
@@ -314,7 +321,6 @@ def captura_de_dados_complementares(tipo, quinzena, current_page, total_de_pagin
                         registros_pagina += 1
 
             print(f"Página {page}: {registros_pagina} registros processados")
-            time.sleep(1)
             page += 1
 
         except Exception as e:
@@ -322,14 +328,18 @@ def captura_de_dados_complementares(tipo, quinzena, current_page, total_de_pagin
             page += 1
             continue
     print(f"Captura finalizada: {len(tabela)} registros totais")
-    return tabela
+    
+    complementares = pd.DataFrame(tabela)
+    
+    return complementares
 
-def complementar_para_excel(tabela, quinzena,carrier):
+def complementar_para_excel(complementares,quinzena,carrier):
+    from tqdm import tqdm
+    tqdm.pandas(desc='Salvando Complementares Excel')
+    complementares.progress_apply(lambda x: None, axis=1)
     if carrier =="true":
-
-        complementares = pd.DataFrame(tabela)
-        complementares.to_excel(f"C:/Users/Bryan Souza/Nextcloud/Contas a Receber - Pralog/Mercado Livre/Análises Meli/Billing_controll/Complementares/Fatura_Complementar_Quinzena_{quinzena}.xlsx", index=False)
-        
+        complementares.to_excel(f"C:/Users/Bryan Souza/Nextcloud/Contas a Receber - Pralog/Mercado Livre/Billing_controll/Complementares/Fatura_Complementar_Quinzena_{quinzena}.xlsx", index=False)
     else:
-        complementares = pd.DataFrame(tabela)
         complementares.to_excel(f"C:/Users/Bryan Souza/Documents/Devizinho_do_malcomply/Fatura_Complementar_Quinzena_{quinzena}.xlsx", index=False)
+
+

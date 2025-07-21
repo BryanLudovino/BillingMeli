@@ -8,6 +8,9 @@ from Functions import senha
 
 quinzena,tipo,carrie = Functions.iniciar_fluxo()
 
+
+
+
 if tipo == "Regular":
 
     paginas_totais, pagina_atual = Functions.definir_paginacao(tipo,quinzena,login,senha,carrie)
@@ -25,9 +28,15 @@ if tipo == "Regular":
     descontos = Functions.tabela_descontos(penalidades)
 
     adicional = Functions.tabela_adicionais(adicionais)
+    
 
 
     Functions.regular_para_excel(routas_billing,descontos,adicionais,quinzena,carrie)
+
+ 
+       
+
+        
 
 
 else:
@@ -39,4 +48,4 @@ else:
 
 
 
-
+    
