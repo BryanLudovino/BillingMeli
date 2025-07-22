@@ -5,6 +5,8 @@ import time
 import re
 from tqdm import tqdm
 import numpy as np
+import os
+import pyodbc
 
 login = "e23b5220-da7e-414d-a773-242c0fce2c5d"
 senha = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjp7ImlkIjo1LCJlbWFpbCI6ImJyeWFuLnNvdXphQGdydXBvcHJhbG9nLmNvbS5iciJ9LCJ0ZW5hbnQiOnsidXVpZCI6ImUyM2I1MjIwLWRhN2UtNDE0ZC1hNzczLTI0MmMwZmNlMmM1ZCJ9LCJpYXQiOjE3NTMxMTAyOTcsImV4cCI6MTc1MzE1MzQ5N30.7IZCI4JS7n6hu1FEoO-zGOC7rqkDfIsTG_C-_TLnPqw"
@@ -23,8 +25,14 @@ def iniciar_fluxo():
         print("Seleção Inválida")
         carrie = input("isonwcarrie?: \n1-true\n2-false")
     carrie = isonwcarrie[carrie]
+    print("Escolha a saída dos dados:\n1 - Excel\n2 - CSV")
+    saida = input("Digite 1 ou 2: ")
+    while saida not in ["1", "2"]:
+        print("Opção inválida!")
+        saida = input("Digite 1 para Excel ou 2 para CSV: ")
     print("Etapa finalizada de Fluxo Finalizada com sucesso")
-    return quinzena, tipo, carrie
+    return quinzena, tipo, carrie, saida
+
 
 def definir_paginacao(tipo, quinzena,login,senha,carrie):
     try:
@@ -55,17 +63,16 @@ def definir_paginacao(tipo, quinzena,login,senha,carrie):
 def captura_de_dados_regulares(tipo, quinzena, current_page, total_de_paginas,carrie):
     tabela = []
     print(f"Iniciando captura de dados regulares: {total_de_paginas} páginas totais")
-    
-    page = current_page  # Variável para controlar o loop
-    
-    while page <= total_de_paginas:
+    page = current_page
+    from tqdm import tqdm
+    for page in tqdm(range(current_page, total_de_paginas+1), desc='Capturando páginas', unit='página'):
         print(f"Processando página {page} de {total_de_paginas}")
-        
+        time.sleep(2)
         try:
             resposta = requests.get(
                 "https://prafrota-be-bff-tenant-api.grupopra.tech/meli-pre-invoice-detail",
                 params={
-                    "page": page,  # Usa a variável do loop, minúsculo
+                    "page": page,
                     "limit": 1,
                     "meliType": tipo,
                     "isOwnCarrier": carrie,
@@ -247,18 +254,18 @@ def regular_para_excel(rotas, penalidades, adicionais, quinzena, carrie):
     if carrie == "true":
         with pd.ExcelWriter(f"C:/Users/Bryan Souza/Nextcloud/Contas a Receber - Pralog/Mercado Livre/Billing_controll/Regulares/Fatura Regular Quinzena {quinzena}.xlsx", engine="openpyxl") as writer:
             for df, name in zip([rotas, penalidades], ["Rotas", "Descontos"]):
-                tqdm.pandas(desc=f'Salvando {name}')
-                df.progress_apply(lambda x: None, axis=1)
+                for _ in tqdm(df.iterrows(), total=len(df), desc=f'Salvando {name}', unit='linha'):
+                    pass
                 df.to_excel(writer, sheet_name=name, index=False)
-        tqdm.pandas(desc='Salvando Adicionais')
-        adicionais.progress_apply(lambda x: None, axis=1)
+        for _ in tqdm(adicionais.iterrows(), total=len(adicionais), desc='Salvando Adicionais', unit='linha'):
+            pass
         adicionais.to_excel(f"C:/Users/Bryan Souza/Nextcloud/Contas a Receber - Pralog/Mercado Livre/Billing_controll/Adicionais/Adicional Regular {quinzena}.xlsx" ,index=False)
         print(f"Planilha Fatura Regular Quinzena {quinzena}, salva com sucesso!!")
     else:
         with pd.ExcelWriter(f"C:/Users/Bryan Souza/Documents/Devizinho_do_mal/Fatura Regular Quinzena {quinzena}.xlsx", engine="openpyxl") as writer:
             for df, name in zip([rotas, penalidades], ["Rotas", "Descontos"]):
-                tqdm.pandas(desc=f'Salvando {name}')
-                df.progress_apply(lambda x: None, axis=1)
+                for _ in tqdm(df.iterrows(), total=len(df), desc=f'Salvando {name}', unit='linha'):
+                    pass
                 df.to_excel(writer, sheet_name=name, index=False)
         print(f"Planilha Fatura Regular Quinzena {quinzena}, salva com sucesso!")
 
@@ -266,10 +273,10 @@ def regular_para_excel(rotas, penalidades, adicionais, quinzena, carrie):
 def captura_de_dados_complementares(tipo, quinzena, current_page, total_de_paginas,carrie):
     tabela = []
     print(f"Iniciando captura de dados complementares: {total_de_paginas} páginas totais")
-    
-    page = current_page
-    while page <= total_de_paginas:
+    from tqdm import tqdm
+    for page in tqdm(range(current_page, total_de_paginas+1), desc='Capturando páginas', unit='página'):
         print(f"Processando página {page} de {total_de_paginas}")
+        time.sleep(2)
         try:
             resposta = requests.get(
                 "https://prafrota-be-bff-tenant-api.grupopra.tech/meli-pre-invoice-detail",
@@ -353,3 +360,47 @@ def complementar_para_excel(complementares,quinzena,carrier):
         complementares.to_excel(f"C:/Users/Bryan Souza/Documents/Devizinho_do_malcomply/Fatura_Complementar_Quinzena_{quinzena}.xlsx", index=False)
 
 
+
+
+def complementar_para_csv(complementares,quinzena,carrier):
+    from tqdm import tqdm
+    tqdm.pandas(desc='Salvando Complementares Excel')
+    complementares.progress_apply(lambda x: None, axis=1)
+    if carrier =="true":
+        complementares.to_CSV(f"C:/Users/Bryan Souza/Desktop/Complementares/Projeto Dev do mal{quinzena}.csv", index=False)
+    else:
+        complementares.to_CSV(f"C:/Users/Bryan Souza/Desktop/Complementares/Projeto Dev do mal{quinzena}.csv", index=False)
+
+
+
+def regular_para_CSV(rotas, penalidades, adicionais, quinzena, carrie):
+    from tqdm import tqdm
+
+    if carrie == "true":
+        # Caminhos para salvar os arquivos
+        base_path = "C:/Users/Bryan Souza/Nextcloud/Contas a Receber - Pralog/Mercado Livre/Billing_controll"
+        fatura_path = f"{base_path}/Regulares/Fatura Regular Quinzena {quinzena}.csv"
+        adicionais_path = f"{base_path}/Adicionais/Adicional Regular {quinzena}.csv"
+
+        # Salvar Rotas e Penalidades
+        for df, name in zip([rotas, penalidades], ["Rotas", "Descontos"]):
+            for _ in tqdm(df.iterrows(), total=len(df), desc=f'Salvando {name}', unit='linha'):
+                pass
+            df.to_csv(f"{base_path}/Regulares/{name} Quinzena {quinzena}.csv", index=False, sep=";")
+        
+        # Salvar Adicionais
+        for _ in tqdm(adicionais.iterrows(), total=len(adicionais), desc='Salvando Adicionais', unit='linha'):
+            pass
+        adicionais.to_csv(adicionais_path, index=False, sep=";")
+
+        print(f"Arquivos CSV da Fatura Regular Quinzena {quinzena} salvos com sucesso!!")
+
+    else:
+        base_path = "C:/Users/Bryan Souza/Documents/Devizinho_do_mal"
+        # Salvar Rotas e Penalidades
+        for df, name in zip([rotas, penalidades], ["Rotas", "Descontos"]):
+            for _ in tqdm(df.iterrows(), total=len(df), desc=f'Salvando {name}', unit='linha'):
+                pass
+            df.to_csv(f"{base_path}/{name} Quinzena {quinzena}.csv", index=False, sep=";")
+
+        print(f"Arquivos CSV da Fatura Regular Quinzena {quinzena} salvos com sucesso!")
