@@ -1,41 +1,42 @@
 import pandas as pd
 import requests
-import openpyxl
 import time
 import re
 from tqdm import tqdm
 import numpy as np
-import os
-import pyodbc
+
 
 login = "e23b5220-da7e-414d-a773-242c0fce2c5d"
-senha = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjp7ImlkIjo1LCJlbWFpbCI6ImJyeWFuLnNvdXphQGdydXBvcHJhbG9nLmNvbS5iciJ9LCJ0ZW5hbnQiOnsidXVpZCI6ImUyM2I1MjIwLWRhN2UtNDE0ZC1hNzczLTI0MmMwZmNlMmM1ZCJ9LCJpYXQiOjE3NTMxMTAyOTcsImV4cCI6MTc1MzE1MzQ5N30.7IZCI4JS7n6hu1FEoO-zGOC7rqkDfIsTG_C-_TLnPqw"
+senha = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjp7ImlkIjo1LCJlbWFpbCI6ImJyeWFuLnNvdXphQGdydXBvcHJhbG9nLmNvbS5iciJ9LCJ0ZW5hbnQiOnsidXVpZCI6ImUyM2I1MjIwLWRhN2UtNDE0ZC1hNzczLTI0MmMwZmNlMmM1ZCJ9LCJpYXQiOjE3NTMyODkzMDYsImV4cCI6MTc1MzMzMjUwNn0.LmYlpddqRTKXGoH2c0UM1x-8O-_9dDkbp7Xt-jp0xlo"
+
 
 def iniciar_fluxo():
     tipo_de_regulares = {"1": "Regular", "2": "Complementaria"}
-    isonwcarrie = {"1":"true","2":"false"}
-    tipo = input("Bem vindo à Captura processada de Faturas do Meli\nPor favor, digite o tipo de fatura que você deseja:\n1-Regular\n2-Complementar  ")
+    isonwcarrie = {"1": "true", "2": "false"}
+
+    tipo = input("Bem vindo à Captura processada de Faturas do Meli\n"
+                 "Digite o tipo de fatura:\n1-Regular\n2-Complementar: ")
     while tipo not in tipo_de_regulares:
-        print("Tipo Inválido!!")
-        tipo = input("Por favor, digite o tipo de fatura que você deseja (Regular ou Complementar):  ")
+        print("Tipo inválido!")
+        tipo = input("Digite 1 para Regular ou 2 para Complementar: ")
     tipo = tipo_de_regulares[tipo]
-    quinzena = input("Agora digite a Quinzena desejada (ex: 202505Q1): ")
-    carrie = input("isonwcarrie?: \n1-true\n2-false")
+
+    quinzena = input("Digite a Quinzena desejada (ex: 202505Q1): ")
+
+    carrie = input("isonwcarrie?:\n1-true\n2-false: ")
     while carrie not in isonwcarrie:
-        print("Seleção Inválida")
-        carrie = input("isonwcarrie?: \n1-true\n2-false")
+        print("Seleção inválida!")
+        carrie = input("isonwcarrie?:\n1-true\n2-false: ")
     carrie = isonwcarrie[carrie]
-    print("Escolha a saída dos dados:\n1 - Excel\n2 - CSV")
-    saida = input("Digite 1 ou 2: ")
-    while saida not in ["1", "2"]:
-        print("Opção inválida!")
-        saida = input("Digite 1 para Excel ou 2 para CSV: ")
-    print("Etapa finalizada de Fluxo Finalizada com sucesso")
-    return quinzena, tipo, carrie, saida
+
+    print("\n===> A saída será em CSV incremental (stream)")
+    print("Fluxo iniciado com sucesso.\n")
+    return quinzena, tipo, carrie
 
 
-def definir_paginacao(tipo, quinzena,login,senha,carrie):
+def definir_paginacao(tipo, quinzena, login, senha, carrie):
     try:
+        print("Definindo paginação...")
         requisicao_controller = requests.get(
             "https://prafrota-be-bff-tenant-api.grupopra.tech/meli-pre-invoice-detail",
             params={
@@ -49,25 +50,42 @@ def definir_paginacao(tipo, quinzena,login,senha,carrie):
                 "accept": "application/json",
                 "x-tenant-uuid": login,
                 "x-tenant-user-auth": senha
-            }
+            },
+            timeout=30
         )
         data = requisicao_controller.json()
         total_de_paginas = data.get('pageCount')
         current_page = data.get('currentPage')
+        print(f"Total de páginas: {total_de_paginas}\n")
         return total_de_paginas, current_page
-        print("Paginação definida")
     except Exception as e:
         print(f"Erro ao definir paginação: {e}")
-        return total_de_paginas,current_page
+        return 0, 0
 
-def captura_de_dados_regulares(tipo, quinzena, current_page, total_de_paginas,carrie):
-    tabela = []
-    print(f"Iniciando captura de dados regulares: {total_de_paginas} páginas totais")
-    page = current_page
-    from tqdm import tqdm
-    for page in tqdm(range(current_page, total_de_paginas+1), desc='Capturando páginas', unit='página'):
-        print(f"Processando página {page} de {total_de_paginas}")
-        time.sleep(2)
+
+def captura_de_dados_regulares(tipo, quinzena, current_page, total_de_paginas, carrie):
+    lista_km = [
+        "1/100", "101/150", "0/100", "151/200", "201/250", "251/300", "51/100", "0/50",
+        "201/300", "301/99999", "1/50", "0/0", "0/25", "26/50", "51/75", "76/100",
+        "301/400", "401/500", "501/600", "601/700", "701/800", "801/900", "901/1000",
+        "1001/1100", "1101/1200", "1201/1300", "1301/1400", "1401/1500"
+    ]
+
+    arquivos = {
+        "rotas": f"C:/Users/Bryan Souza/Desktop/Projeto Dev do mal/Regulares/{quinzena}.csv",
+        "penalidades": f"C:/Users/Bryan Souza/Desktop/Projeto Dev do mal/Penalidades/{quinzena}.csv",
+        "adicionais": f"C:/Users/Bryan Souza/Desktop/Projeto Dev do mal/Adiconais/{quinzena}.csv"
+    }
+
+    # Remove arquivos antigos se existirem
+    for arq in arquivos.values():
+        try:
+            open(arq, 'w').close()
+        except:
+            pass
+
+    print("Iniciando captura de dados REGULARES...\n")
+    for page in tqdm(range(current_page, total_de_paginas + 1), desc="Processando páginas", unit="página"):
         try:
             resposta = requests.get(
                 "https://prafrota-be-bff-tenant-api.grupopra.tech/meli-pre-invoice-detail",
@@ -82,35 +100,50 @@ def captura_de_dados_regulares(tipo, quinzena, current_page, total_de_paginas,ca
                     "accept": "application/json",
                     "x-tenant-uuid": login,
                     "x-tenant-user-auth": senha
-                }
+                },
+                timeout=30
             )
-            
+            time.sleep(3)
+
             if resposta.status_code != 200:
                 print(f"Erro na página {page}: Status {resposta.status_code}")
-                page += 1
                 continue
-                
+
             json_resposta = resposta.json()
             dados = json_resposta.get('data', [])
-            
             if not dados:
-                print(f"Página {page}: Sem dados")
-                page += 1
+                print(f"Página {page}: sem dados.")
                 continue
-            
-            registros_pagina = 0
+
+            tabela = []
             for linha in dados:
                 meli_data = linha.get('meliData', {})
                 items = meli_data.get('items', [])
-                
+
                 if not items:
+                    tabela.append({
+                        "company": linha.get("meliProviderName"),
+                        "id_invoiceId": int(linha.get("meliPreInvoiceId", 0)) if linha.get("meliPreInvoiceId") else None,
+                        "detail_route_id": None,
+                        "init_date": None,
+                        "finish_date": None,
+                        "operation": linha.get("meliStepType"),
+                        "two_weeks": linha.get("meliPeriodName"),
+                        "Description_route": None,
+                        "license_plate": None,
+                        "driver_name": None,
+                        "type_len": None,
+                        "tax_iss": 0,
+                        "tax_icms": 0,
+                        "amount": 0,
+                        "cost": 0,
+                        "custo": 0
+                    })
                     continue
-                    
+
                 for details in items:
                     detail = details.get("details", [])
-                    
                     if not detail:
-                        # Se não há details, cria um registro com dados básicos
                         tabela.append({
                             "company": linha.get("meliProviderName"),
                             "id_invoiceId": int(linha.get("meliPreInvoiceId", 0)) if linha.get("meliPreInvoiceId") else None,
@@ -129,9 +162,8 @@ def captura_de_dados_regulares(tipo, quinzena, current_page, total_de_paginas,ca
                             "cost": float(details.get("total_cost", 0) or 0),
                             "custo": float(details.get("cost", 0) or 0)
                         })
-                        registros_pagina += 1
                         continue
-                    
+
                     for det in detail:
                         tabela.append({
                             "company": linha.get("meliProviderName"),
@@ -151,132 +183,61 @@ def captura_de_dados_regulares(tipo, quinzena, current_page, total_de_paginas,ca
                             "cost": float(det.get("cost", 0) or 0),
                             "custo": float(details.get("cost", 0) or 0)
                         })
-                        registros_pagina += 1
-            
-            print(f"Página {page}: {registros_pagina} registros processados")
-            page += 1  # Incrementa a variável do loop
-            
+
+            # Tratamento dos DataFrames
+            df = pd.DataFrame(tabela)
+            rotas = df[df['type_len'] == "service"].copy()
+            penalidades = df[df['type_len'] == "penalty"].copy()
+            adicionais = df[df['type_len'].isin(["additional", "refund"])].copy()
+
+            # TRATAMENTO ROTAS
+            if not rotas.empty:
+                regex_km = "|".join([re.escape(km) for km in lista_km])
+                rotas['Description_route'] = rotas['Description_route'].astype(str)
+                rotas['km'] = rotas['Description_route'].str.extract(f"({regex_km})", flags=re.IGNORECASE)
+                rotas['km'] = rotas['km'].fillna("0/0").str.replace('0/100', '1/100')
+                rotas['ambulance'] = rotas['Description_route'].str.contains("AMBULANCE", case=False, na=False).map({True: 'Yes', False: 'No'})
+                rotas['part_of_time'] = rotas['Description_route'].str.contains("TIME", case=False, na=False).map({True: 'Yes', False: 'No'})
+                rotas['holiday'] = rotas['Description_route'].str.contains("HOLYDAY", case=False, na=False).map({True: 'Yes', False: 'No'})
+                rotas[['type_route', 'part2']] = rotas['Description_route'].str.split(' - SVC:', n=1, expand=True)
+                rotas['service'] = rotas['part2'].str.split(' - ', expand=True)[0].str.strip()
+                rotas.drop(columns=['Description_route', 'type_len', 'part2', 'custo'], inplace=True)
+
+            # TRATAMENTO PENALIDADES
+            if not penalidades.empty:
+                penalidades['Description_route'] = penalidades['Description_route'].str.replace('> ', ':', regex=False)
+                penalidades[['reason', 'dados']] = penalidades['Description_route'].str.split(': ', n=1, expand=True)
+                penalidades[['placa', 'datax', 'A']] = penalidades['dados'].str.split(' ', n=2, expand=True)
+                penalidades['id Packages'] = penalidades.apply(
+                    lambda row: row['datax'] if row['reason'] == 'Pnr Packages Penalty'
+                    else row['A'] if row['reason'] == 'Lost Packages Penalty'
+                    else np.nan, axis=1
+                )
+                penalidades.drop(columns=[col for col in ['placa', 'datax', 'Description_route', 'dados', 'type_len', 'amount', 'A'] if col in penalidades.columns], inplace=True)
+
+            # TRATAMENTO ADICIONAIS
+            if not adicionais.empty:
+                split_result = adicionais['Description_route'].str.split('-', n=1, expand=True)
+                if len(split_result.columns) == 1:
+                    split_result[1] = None
+                adicionais['reason'] = split_result[0].str.strip()
+                adicionais.drop(columns=[col for col in ['tax_iss', 'tax_icms', 'type_len', 'Description_route', 'cost'] if col in adicionais.columns], inplace=True)
+
+            # SALVAR CSV incremental
+            rotas.to_csv(arquivos["rotas"], mode='a', header=(page == 1), index=False)
+            penalidades.to_csv(arquivos["penalidades"], mode='a', header=(page == 1), index=False)
+            adicionais.to_csv(arquivos["adicionais"], mode='a', header=(page == 1), index=False)
+
         except Exception as e:
-            print(f"Erro ao processar página {page}: {e}")
-            page += 1
-            continue
-    
-    print(f"Captura finalizada: {len(tabela)} registros totais")
-    return tabela
+            print(f"Erro na página {page}: {e}")
 
 
-def filtrar_tabelas(tabela):
-    df = pd.DataFrame(tabela)
-    if 'type_len' not in df.columns:
-        print("Coluna 'type_len' não encontrada! Colunas disponíveis:", df.columns)
-        return df, pd.DataFrame(), pd.DataFrame()
-    
-    # Criar cópias explícitas
-    rotas = df[df['type_len'] == "service"].copy()
-    penalidades = df[df['type_len'] == "penalty"].copy()
-    adicionais = df[df['type_len'].isin(["additional", "refund"])].copy()
-    
-    return rotas, penalidades, adicionais
+def captura_de_dados_complementares(tipo, quinzena, current_page, total_de_paginas, carrie):
+    arquivo_complementar = f"C:/Users/Bryan Souza/Desktop/Projeto Dev do mal/Complementares/{quinzena}.csv"
+    open(arquivo_complementar, 'w').close()  # Limpa arquivo antigo
 
-def tabela_rotas(rotas):
-    lista_km = [
-        "1/100", "101/150", "0/100", "151/200", "201/250", "251/300", "51/100", "0/50",
-        "201/300", "301/99999", "1/50", "0/0", "0/25", "26/50", "51/75", "76/100",
-        "301/400", "401/500", "501/600", "601/700", "701/800", "801/900", "901/1000",
-        "1001/1100", "1101/1200", "1201/1300", "1301/1400", "1401/1500"
-    ]
-    regex_km = "|".join([re.escape(km) for km in lista_km])
-    if 'Description_route' in rotas.columns:
-        rotas['Description_route'] = rotas['Description_route'].astype(str)
-        rotas['km'] = rotas['Description_route'].str.extract(f"({regex_km})", flags=re.IGNORECASE)
-        rotas['km'] = rotas['km'].fillna("0/0")
-        rotas['km'] = rotas['km'].str.replace('0/100','1/100')
-        rotas['ambulance'] = rotas['Description_route'].str.contains("AMBULANCE", case=False, na=False).map({True: 'Yes', False: 'No'})
-        rotas['part_of_time'] = rotas['Description_route'].str.contains("TIME", case=False, na=False).map({True: 'Yes', False: 'No'})
-        rotas['holiday'] = rotas['Description_route'].str.contains("HOLYDAY", case=False, na=False).map({True: 'Yes', False: 'No'})
-        rotas[['type_route', 'part2']] = rotas['Description_route'].str.split(' - SVC:', n=1, expand=True)
-        rotas['service'] = rotas['part2'].str.split(' - ',expand=True)[0].str.strip()
-        rotas.drop(columns= ['Description_route','type_len','part2','custo'],inplace= True)
-        rotas = rotas[['company','id_invoiceId','detail_route_id','init_date','finish_date','operation','two_weeks','type_route','service','license_plate','driver_name','km','ambulance','part_of_time','holiday','tax_iss','tax_icms','cost']]
-
-    else:
-        rotas['km'] = "Sem valor"
-        rotas['ambulance'] = 'No'
-        rotas['part_of_time'] = 'No'
-        rotas['holiday'] = 'No'
-    # Remover manipulação da coluna 'lixo' se ela não existir
-    if 'lixo' in rotas.columns:
-        rotas[['Parte Lixo 1', 'Parte Lixo 2']] = rotas['lixo'].str.split(' - ', n=1, expand=True)
-        rotas.drop(columns=['lixo'], inplace=True)
-    return rotas
-
-def tabela_descontos(penalidades):
-    if 'Description_route' in penalidades.columns:
-        penalidades['Description_route'] = penalidades['Description_route'].str.replace('> ', ':', regex=False)
-        penalidades[['reason', 'dados']] = penalidades['Description_route'].str.split(': ', n=1, expand=True)
-        penalidades[['placa', 'datax', 'A']] = penalidades['dados'].str.split(' ', n=2, expand=True)
-        penalidades['id Packages']= penalidades.apply(
-            lambda row:
-            row['datax'] if row ['reason']== 'Pnr Packages Penalty'
-            else row['A'] if row ['reason'] == 'Lost Packages Penalty'
-            else np.nan, axis=1)
-        penalidades[['Reason','exc']] = penalidades['reason'].str.split(':',n=1,expand = True)  
-        drop_cols = [col for col in ['placa', 'datax', 'Description_route', 'tax_iss', 'tax_icms', 'dados', 'type_len', 'amount','A','reason','exc','custo'] if col in penalidades.columns]
-        penalidades.drop(columns=drop_cols, inplace=True)
-        return penalidades
-
-def tabela_adicionais(adicionais):
-    # Se a tabela estiver vazia, retorna sem processar
-    if adicionais.empty:
-        return adicionais
-    
-    if 'Description_route' in adicionais.columns:
-        # Faz o split e garante que sempre há 2 colunas
-        split_result = adicionais['Description_route'].str.split('-', n=1, expand=True)
-        
-        # Se só há 1 coluna (não encontrou ' - '), cria a segunda coluna vazia
-        if len(split_result.columns) == 1:
-            split_result[1] = None
-
-        
-        # Atribui as colunas
-        adicionais['reason'] = split_result[0].str.strip()
-        adicionais['excluir'] = split_result[1]
-
-        # Remove colunas desnecessárias
-        drop_cols = [col for col in ['tax_iss', 'tax_icms', 'type_len', 'excluir', 'Description_route','cost'] if col in adicionais.columns]
-        adicionais.drop(columns=drop_cols, inplace=True)
-    
-    return adicionais
-
-def regular_para_excel(rotas, penalidades, adicionais, quinzena, carrie):
-    from tqdm import tqdm
-    if carrie == "true":
-        with pd.ExcelWriter(f"C:/Users/Bryan Souza/Nextcloud/Contas a Receber - Pralog/Mercado Livre/Billing_controll/Regulares/Fatura Regular Quinzena {quinzena}.xlsx", engine="openpyxl") as writer:
-            for df, name in zip([rotas, penalidades], ["Rotas", "Descontos"]):
-                for _ in tqdm(df.iterrows(), total=len(df), desc=f'Salvando {name}', unit='linha'):
-                    pass
-                df.to_excel(writer, sheet_name=name, index=False)
-        for _ in tqdm(adicionais.iterrows(), total=len(adicionais), desc='Salvando Adicionais', unit='linha'):
-            pass
-        adicionais.to_excel(f"C:/Users/Bryan Souza/Nextcloud/Contas a Receber - Pralog/Mercado Livre/Billing_controll/Adicionais/Adicional Regular {quinzena}.xlsx" ,index=False)
-        print(f"Planilha Fatura Regular Quinzena {quinzena}, salva com sucesso!!")
-    else:
-        with pd.ExcelWriter(f"C:/Users/Bryan Souza/Documents/Devizinho_do_mal/Fatura Regular Quinzena {quinzena}.xlsx", engine="openpyxl") as writer:
-            for df, name in zip([rotas, penalidades], ["Rotas", "Descontos"]):
-                for _ in tqdm(df.iterrows(), total=len(df), desc=f'Salvando {name}', unit='linha'):
-                    pass
-                df.to_excel(writer, sheet_name=name, index=False)
-        print(f"Planilha Fatura Regular Quinzena {quinzena}, salva com sucesso!")
-
-
-def captura_de_dados_complementares(tipo, quinzena, current_page, total_de_paginas,carrie):
-    tabela = []
-    print(f"Iniciando captura de dados complementares: {total_de_paginas} páginas totais")
-    from tqdm import tqdm
-    for page in tqdm(range(current_page, total_de_paginas+1), desc='Capturando páginas', unit='página'):
-        print(f"Processando página {page} de {total_de_paginas}")
-        time.sleep(2)
+    print("Iniciando captura de dados COMPLEMENTARES...\n")
+    for page in tqdm(range(current_page, total_de_paginas + 1), desc="Processando páginas", unit="página"):
         try:
             resposta = requests.get(
                 "https://prafrota-be-bff-tenant-api.grupopra.tech/meli-pre-invoice-detail",
@@ -291,23 +252,22 @@ def captura_de_dados_complementares(tipo, quinzena, current_page, total_de_pagin
                     "accept": "application/json",
                     "x-tenant-uuid": login,
                     "x-tenant-user-auth": senha
-                }
+                },
+                timeout=30
             )
-            
+            time.sleep(3)
+
             if resposta.status_code != 200:
                 print(f"Erro na página {page}: Status {resposta.status_code}")
-                page += 1
                 continue
 
             json_resposta = resposta.json()
             dados = json_resposta.get('data', [])
-
             if not dados:
-                print(f"Página {page}: Sem dados")
-                page += 1
+                print(f"Página {page}: sem dados.")
                 continue
 
-            registros_pagina = 0
+            tabela = []
             for linha in dados:
                 meli_data = linha.get('meliData', {})
                 items = meli_data.get('items', [])
@@ -319,10 +279,9 @@ def captura_de_dados_complementares(tipo, quinzena, current_page, total_de_pagin
                         "two_weeks": linha.get('meliPeriodName'),
                         "description": None,
                         "payment": None,
-                        "pay_or_received":None,
+                        "pay_or_received": None,
                         "cost": None
                     })
-                    registros_pagina += 1
                 else:
                     for item in items:
                         tabela.append({
@@ -335,72 +294,9 @@ def captura_de_dados_complementares(tipo, quinzena, current_page, total_de_pagin
                             "pay_or_received": (item.get('item_type') or {}).get('operation'),
                             "cost": float(item.get('total_cost', 0))
                         })
-                        registros_pagina += 1
 
-            print(f"Página {page}: {registros_pagina} registros processados")
-            page += 1
+            complementares = pd.DataFrame(tabela)
+            complementares.to_csv(arquivo_complementar, mode='a', header=(page == 1), index=False)
 
         except Exception as e:
-            print(f"Erro ao processar página {page}: {e}")
-            page += 1
-            continue
-    print(f"Captura finalizada: {len(tabela)} registros totais")
-    
-    complementares = pd.DataFrame(tabela)
-    
-    return complementares
-
-def complementar_para_excel(complementares,quinzena,carrier):
-    from tqdm import tqdm
-    tqdm.pandas(desc='Salvando Complementares Excel')
-    complementares.progress_apply(lambda x: None, axis=1)
-    if carrier =="true":
-        complementares.to_excel(f"C:/Users/Bryan Souza/Nextcloud/Contas a Receber - Pralog/Mercado Livre/Billing_controll/Complementares/Fatura_Complementar_Quinzena_{quinzena}.xlsx", index=False)
-    else:
-        complementares.to_excel(f"C:/Users/Bryan Souza/Documents/Devizinho_do_malcomply/Fatura_Complementar_Quinzena_{quinzena}.xlsx", index=False)
-
-
-
-
-def complementar_para_csv(complementares,quinzena,carrier):
-    from tqdm import tqdm
-    tqdm.pandas(desc='Salvando Complementares Excel')
-    complementares.progress_apply(lambda x: None, axis=1)
-    if carrier =="true":
-        complementares.to_CSV(f"C:/Users/Bryan Souza/Desktop/Complementares/Projeto Dev do mal{quinzena}.csv", index=False)
-    else:
-        complementares.to_CSV(f"C:/Users/Bryan Souza/Desktop/Complementares/Projeto Dev do mal{quinzena}.csv", index=False)
-
-
-
-def regular_para_CSV(rotas, penalidades, adicionais, quinzena, carrie):
-    from tqdm import tqdm
-
-    if carrie == "true":
-        # Caminhos para salvar os arquivos
-        base_path = "C:/Users/Bryan Souza/Nextcloud/Contas a Receber - Pralog/Mercado Livre/Billing_controll"
-        fatura_path = f"{base_path}/Regulares/Fatura Regular Quinzena {quinzena}.csv"
-        adicionais_path = f"{base_path}/Adicionais/Adicional Regular {quinzena}.csv"
-
-        # Salvar Rotas e Penalidades
-        for df, name in zip([rotas, penalidades], ["Rotas", "Descontos"]):
-            for _ in tqdm(df.iterrows(), total=len(df), desc=f'Salvando {name}', unit='linha'):
-                pass
-            df.to_csv(f"{base_path}/Regulares/{name} Quinzena {quinzena}.csv", index=False, sep=";")
-        
-        # Salvar Adicionais
-        for _ in tqdm(adicionais.iterrows(), total=len(adicionais), desc='Salvando Adicionais', unit='linha'):
-            pass
-        adicionais.to_csv(adicionais_path, index=False, sep=";")
-
-        print(f"Arquivos CSV da Fatura Regular Quinzena {quinzena} salvos com sucesso!!")
-
-    else:
-        base_path = "C:/Users/Bryan Souza/Documents/Devizinho_do_mal"
-        # Salvar Rotas e Penalidades
-        for df, name in zip([rotas, penalidades], ["Rotas", "Descontos"]):
-            for _ in tqdm(df.iterrows(), total=len(df), desc=f'Salvando {name}', unit='linha'):
-                pass
-            df.to_csv(f"{base_path}/{name} Quinzena {quinzena}.csv", index=False, sep=";")
-
-        print(f"Arquivos CSV da Fatura Regular Quinzena {quinzena} salvos com sucesso!")
+            print(f"Erro na página {page}: {e}")
