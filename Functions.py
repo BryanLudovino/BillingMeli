@@ -7,7 +7,7 @@ import numpy as np
 
 
 login = "e23b5220-da7e-414d-a773-242c0fce2c5d"
-senha = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjp7ImlkIjo1LCJlbWFpbCI6ImJyeWFuLnNvdXphQGdydXBvcHJhbG9nLmNvbS5iciJ9LCJ0ZW5hbnQiOnsidXVpZCI6ImUyM2I1MjIwLWRhN2UtNDE0ZC1hNzczLTI0MmMwZmNlMmM1ZCJ9LCJpYXQiOjE3NTMyODkzMDYsImV4cCI6MTc1MzMzMjUwNn0.LmYlpddqRTKXGoH2c0UM1x-8O-_9dDkbp7Xt-jp0xlo"
+senha = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjp7ImlkIjo1LCJlbWFpbCI6ImJyeWFuLnNvdXphQGdydXBvcHJhbG9nLmNvbS5iciJ9LCJ0ZW5hbnQiOnsidXVpZCI6ImUyM2I1MjIwLWRhN2UtNDE0ZC1hNzczLTI0MmMwZmNlMmM1ZCJ9LCJpYXQiOjE3NTM3MTQzNDQsImV4cCI6MTc1Mzc1NzU0NH0.78l6ZXunNr2ONCB3rXcceExeu6NYBd-yzOAMWXWDAQc"
 
 
 def iniciar_fluxo():
@@ -15,7 +15,7 @@ def iniciar_fluxo():
     isonwcarrie = {"1": "true", "2": "false"}
 
     tipo = input("Bem vindo à Captura processada de Faturas do Meli\n"
-                 "Digite o tipo de fatura:\n1-Regular\n2-Complementar: ")
+                  "Digite o tipo de fatura:\n1-Regular\n2-Complementar: ")
     while tipo not in tipo_de_regulares:
         print("Tipo inválido!")
         tipo = input("Digite 1 para Regular ou 2 para Complementar: ")
@@ -80,9 +80,12 @@ def captura_de_dados_regulares(tipo, quinzena, current_page, total_de_paginas, c
     # Remove arquivos antigos se existirem
     for arq in arquivos.values():
         try:
-            open(arq, 'w').close()
-        except:
-            pass
+            # Garante que o arquivo é criado/limpo
+            with open(arq, 'w') as f:
+                f.write('')
+        except Exception as e:
+            print(f"Aviso: Não foi possível limpar o arquivo {arq}. Erro: {e}")
+
 
     print("Iniciando captura de dados REGULARES...\n")
     for page in tqdm(range(current_page, total_de_paginas + 1), desc="Processando páginas", unit="página"):
@@ -110,6 +113,8 @@ def captura_de_dados_regulares(tipo, quinzena, current_page, total_de_paginas, c
                 continue
 
             json_resposta = resposta.json()
+
+
             dados = json_resposta.get('data', [])
             if not dados:
                 print(f"Página {page}: sem dados.")
@@ -159,8 +164,8 @@ def captura_de_dados_regulares(tipo, quinzena, current_page, total_de_paginas, c
                             "tax_iss": 0,
                             "tax_icms": 0,
                             "amount": 0,
-                            "cost": float(details.get("total_cost", 0) or 0),
-                            "custo": float(details.get("cost", 0) or 0)
+                            "cost": float(details.get("cost", 0) or 0),
+                            "custo": float(det.get("total_cost", 0) or 0)
                         })
                         continue
 
@@ -181,7 +186,7 @@ def captura_de_dados_regulares(tipo, quinzena, current_page, total_de_paginas, c
                             "tax_icms": float(det.get("tax_icms", 0) or 0),
                             "amount": int(det.get("amount", 0) or 0),
                             "cost": float(det.get("cost", 0) or 0),
-                            "custo": float(details.get("cost", 0) or 0)
+                            "custo": float(det.get("total_cost", 0) or 0)
                         })
 
             # Tratamento dos DataFrames
@@ -199,42 +204,76 @@ def captura_de_dados_regulares(tipo, quinzena, current_page, total_de_paginas, c
                 rotas['ambulance'] = rotas['Description_route'].str.contains("AMBULANCE", case=False, na=False).map({True: 'Yes', False: 'No'})
                 rotas['part_of_time'] = rotas['Description_route'].str.contains("TIME", case=False, na=False).map({True: 'Yes', False: 'No'})
                 rotas['holiday'] = rotas['Description_route'].str.contains("HOLYDAY", case=False, na=False).map({True: 'Yes', False: 'No'})
-                rotas[['type_route', 'part2']] = rotas['Description_route'].str.split(' - SVC:', n=1, expand=True)
-                rotas['service'] = rotas['part2'].str.split(' - ', expand=True)[0].str.strip()
-                rotas.drop(columns=['Description_route', 'type_len', 'part2', 'custo'], inplace=True)
+                
+                # Divisão de 'Description_route' para 'type_route' e 'service'
+                # Garante que 'split_svc' sempre terá pelo menos 2 colunas, preenchendo com NaN se não houver divisor
+                split_svc = rotas['Description_route'].str.split(' - SVC:', n=1, expand=True)
+                rotas['type_route'] = split_svc[0].str.strip()
+                rotas['service'] = split_svc[1].str.split(' - ', expand=True)[0].str.strip() if split_svc.shape[1] > 1 else np.nan
+                
+                rotas.drop(columns=['Description_route', 'type_len',], inplace=True, errors='ignore')
+                # Define a ordem desejada das colunas
+                ordem_colunas = ['company','id_invoiceId','detail_route_id','init_date','finish_date','operation','two_weeks','type_route','service','license_plate','driver_name','km','ambulance','part_of_time','holiday','tax_iss','tax_icms','cost','custo']   
+                rotas = rotas.reindex(columns=ordem_colunas)
+
+                
 
             # TRATAMENTO PENALIDADES
             if not penalidades.empty:
                 penalidades['Description_route'] = penalidades['Description_route'].str.replace('> ', ':', regex=False)
-                penalidades[['reason', 'dados']] = penalidades['Description_route'].str.split(': ', n=1, expand=True)
-                penalidades[['placa', 'datax', 'A']] = penalidades['dados'].str.split(' ', n=2, expand=True)
+                
+                # Divide 'Description_route' para 'reason' e 'dados'
+                split_rd = penalidades['Description_route'].str.split(': ', n=1, expand=True)
+                penalidades['reason'] = split_rd[0].str.strip()
+                # Garante que 'dados' existe; caso contrário, será NaN
+                penalidades['dados'] = split_rd[1].str.strip() if split_rd.shape[1] > 1 else np.nan
+
+                # Divide 'dados' para 'placa', 'datax', 'A'
+                # Preenche 'dados' com string vazia para evitar erro no split se for NaN
+                penalidades['dados_safe'] = penalidades['dados'].fillna('') 
+                split_pda = penalidades['dados_safe'].str.split(' ', n=2, expand=True)
+
+                # Atribui as colunas, verificando a existência das partes
+                penalidades['placa'] = split_pda[0].str.strip() if split_pda.shape[1] > 0 else np.nan
+                penalidades['datax'] = split_pda[1].str.strip() if split_pda.shape[1] > 1 else np.nan
+                penalidades['A'] = split_pda[2].str.strip() if split_pda.shape[1] > 2 else np.nan
+
                 penalidades['id Packages'] = penalidades.apply(
                     lambda row: row['datax'] if row['reason'] == 'Pnr Packages Penalty'
                     else row['A'] if row['reason'] == 'Lost Packages Penalty'
                     else np.nan, axis=1
                 )
-                penalidades.drop(columns=[col for col in ['placa', 'datax', 'Description_route', 'dados', 'type_len', 'amount', 'A'] if col in penalidades.columns], inplace=True)
+                penalidades.drop(columns=[col for col in ['placa', 'datax', 'Description_route', 'dados', 'type_len', 'amount', 'A', 'dados_safe'] if col in penalidades.columns], inplace=True, errors='ignore')
 
             # TRATAMENTO ADICIONAIS
             if not adicionais.empty:
                 split_result = adicionais['Description_route'].str.split('-', n=1, expand=True)
-                if len(split_result.columns) == 1:
-                    split_result[1] = None
+                # Garante que sempre haja 2 colunas no split_result
+                if split_result.shape[1] == 1:
+                    split_result[1] = np.nan # ou None
                 adicionais['reason'] = split_result[0].str.strip()
-                adicionais.drop(columns=[col for col in ['tax_iss', 'tax_icms', 'type_len', 'Description_route', 'cost'] if col in adicionais.columns], inplace=True)
+                # Se houver uma segunda parte (split_result[1]), use-a, caso contrário, será NaN
+                adicionais['extra_info'] = split_result[1].str.strip() if split_result.shape[1] > 1 else np.nan
+                adicionais.drop(columns=[col for col in ['tax_iss', 'tax_icms', 'type_len', 'Description_route', 'cost'] if col in adicionais.columns], inplace=True, errors='ignore')
 
             # SALVAR CSV incremental
-            rotas.to_csv(arquivos["rotas"], mode='a', header=(page == 1), index=False)
-            penalidades.to_csv(arquivos["penalidades"], mode='a', header=(page == 1), index=False)
-            adicionais.to_csv(arquivos["adicionais"], mode='a', header=(page == 1), index=False)
+            # O 'header' só é True para a primeira página (page == 1)
+            rotas.to_csv(arquivos["rotas"], mode='a', header=(page == current_page), index=False)
+            penalidades.to_csv(arquivos["penalidades"], mode='a', header=(page == current_page), index=False)
+            adicionais.to_csv(arquivos["adicionais"], mode='a', header=(page == current_page), index=False)
 
         except Exception as e:
-            print(f"Erro na página {page}: {e}")
+            print(f"Erro inesperado na página {page}: {e}")
 
 
 def captura_de_dados_complementares(tipo, quinzena, current_page, total_de_paginas, carrie):
     arquivo_complementar = f"C:/Users/Bryan Souza/Desktop/Projeto Dev do mal/Complementares/{quinzena}.csv"
-    open(arquivo_complementar, 'w').close()  # Limpa arquivo antigo
+    try:
+        # Garante que o arquivo é criado/limpo
+        with open(arquivo_complementar, 'w') as f:
+            f.write('')
+    except Exception as e:
+        print(f"Aviso: Não foi possível limpar o arquivo {arquivo_complementar}. Erro: {e}")
 
     print("Iniciando captura de dados COMPLEMENTARES...\n")
     for page in tqdm(range(current_page, total_de_paginas + 1), desc="Processando páginas", unit="página"):
@@ -262,6 +301,13 @@ def captura_de_dados_complementares(tipo, quinzena, current_page, total_de_pagin
                 continue
 
             json_resposta = resposta.json()
+
+
+            # 🚨 VERIFICAÇÃO de custo total zero
+            if float(json_resposta.get('meliTotalCost')) == 0:
+                print(f"Página {page}: valor TOTAL de custo é ZERO. Ignorando processamento.")
+                continue
+
             dados = json_resposta.get('data', [])
             if not dados:
                 print(f"Página {page}: sem dados.")
@@ -273,7 +319,7 @@ def captura_de_dados_complementares(tipo, quinzena, current_page, total_de_pagin
                 items = meli_data.get('items', [])
                 if not items:
                     tabela.append({
-                        "id_billing": float(linha.get('meliPreInvoiceId', 0)),
+                        "id_billing": float(linha.get('meliPreInvoiceId', 0)) if linha.get('meliPreInvoiceId') else None,
                         "company": linha.get('meliProviderName'),
                         "operation": linha.get('meliStepType'),
                         "two_weeks": linha.get('meliPeriodName'),
@@ -285,7 +331,7 @@ def captura_de_dados_complementares(tipo, quinzena, current_page, total_de_pagin
                 else:
                     for item in items:
                         tabela.append({
-                            "id_billing": int(linha.get('meliPreInvoiceId', 0)),
+                            "id_billing": int(linha.get('meliPreInvoiceId', 0)) if linha.get('meliPreInvoiceId') else None,
                             "company": linha.get('meliProviderName'),
                             "operation": linha.get('meliStepType'),
                             "two_weeks": linha.get('meliPeriodName'),
@@ -296,7 +342,8 @@ def captura_de_dados_complementares(tipo, quinzena, current_page, total_de_pagin
                         })
 
             complementares = pd.DataFrame(tabela)
-            complementares.to_csv(arquivo_complementar, mode='a', header=(page == 1), index=False)
+            # O 'header' só é True para a primeira página (page == 1)
+            complementares.to_csv(arquivo_complementar, mode='a', header=(page == current_page), index=False)
 
         except Exception as e:
-            print(f"Erro na página {page}: {e}")
+            print(f"Erro inesperado na página {page}: {e}")
